@@ -12,6 +12,10 @@ const { t } = useI18n();
 const DEFAULT_STAGES = ['novo', 'qualificado', 'cliente', 'nao_responde', 'excluir'];
 // Estagio que exige o valor do contrato (e que dispara o evento de venda).
 const WON_STAGE = 'cliente';
+// Coluna de entrada: alem dos marcados explicitamente, pesca todo contato que
+// ainda NAO tem estagio. E o que faz o lead novo cair no board sozinho, sem
+// ninguem precisar marcar nada.
+const INBOX_STAGE = 'novo';
 
 const isLoading = ref(false);
 // { [stage]: Contact[] }
@@ -46,17 +50,30 @@ const columnTotal = stage =>
     0
   );
 
-const fetchStage = async stage => {
-  const queryPayload = {
-    payload: [
-      {
-        attribute_key: 'stage',
-        filter_operator: 'equal_to',
-        values: [stage],
-        query_operator: null,
-      },
-    ],
+const stageQuery = stage => {
+  const marcados = {
+    attribute_key: 'stage',
+    filter_operator: 'equal_to',
+    values: [stage],
+    query_operator: null,
   };
+  if (stage !== INBOX_STAGE) return [marcados];
+
+  // Coluna de entrada: "sem estagio" OR "marcado como novo".
+  // is_not_present vira `IS NULL` no SQL (FilterService#filter_operation).
+  return [
+    {
+      attribute_key: 'stage',
+      filter_operator: 'is_not_present',
+      values: [],
+      query_operator: 'OR',
+    },
+    marcados,
+  ];
+};
+
+const fetchStage = async stage => {
+  const queryPayload = { payload: stageQuery(stage) };
   // resetState: false — nao limpa a lista global entre colunas.
   const contacts = await store.dispatch('contacts/filter', {
     queryPayload,
