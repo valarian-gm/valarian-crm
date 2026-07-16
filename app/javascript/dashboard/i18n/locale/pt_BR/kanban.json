@@ -11,6 +11,10 @@
       "CLIENTE": "Cliente",
       "NAO_RESPONDE": "Não responde",
       "EXCLUIR": "Excluir"
-    }
+    },
+    "WON_SUMMARY": "fechado em {count} contrato(s)",
+    "OPEN_CONVERSATION": "Abrir conversa",
+    "OPEN_CONTACT": "Abrir ficha do contato",
+    "NO_CONVERSATION": "Esse lead ainda não tem conversa."
   }
 }

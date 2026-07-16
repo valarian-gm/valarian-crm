@@ -11,6 +11,10 @@
       "CLIENTE": "Customer",
       "NAO_RESPONDE": "No reply",
       "EXCLUIR": "Exclude"
-    }
+    },
+    "WON_SUMMARY": "closed across {count} contract(s)",
+    "OPEN_CONVERSATION": "Open conversation",
+    "OPEN_CONTACT": "Open contact",
+    "NO_CONVERSATION": "This lead has no conversation yet."
   }
 }

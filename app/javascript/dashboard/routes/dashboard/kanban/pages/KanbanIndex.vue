@@ -1,11 +1,13 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useI18n } from 'vue-i18n';
 import Draggable from 'vuedraggable';
 import { useAlert } from 'dashboard/composables';
 
 const store = useStore();
+const router = useRouter();
 const { t } = useI18n();
 
 // Fallback caso a rake valarian:setup_kanban ainda nao tenha rodado.
@@ -49,6 +51,39 @@ const columnTotal = stage =>
     (sum, contact) => sum + Number(contact.customAttributes?.valorContrato || 0),
     0
   );
+
+// Total do topo = so a coluna Cliente. Somar todas as colunas misturaria o que
+// nao deve (lead em 'excluir' com valor entraria na conta); o numero que importa
+// e o contrato FECHADO.
+const wonTotal = computed(() => columnTotal(WON_STAGE));
+const wonCount = computed(() => (columns.value[WON_STAGE] || []).length);
+
+// Abrir o lead = abrir a CONVERSA (e onde se trabalha: le o papo e responde).
+// O contato fica como acao secundaria (icone no card).
+const conversationsOf = useMapGetter(
+  'contactConversations/getAllConversationsByContactId'
+);
+
+const openConversation = async contact => {
+  let conversations = conversationsOf.value(contact.id);
+  if (!conversations?.length) {
+    await store.dispatch('contactConversations/get', contact.id);
+    conversations = conversationsOf.value(contact.id);
+  }
+  const conversationId = conversations?.[0]?.id;
+  if (!conversationId) {
+    useAlert(t('KANBAN.NO_CONVERSATION'));
+    return;
+  }
+  router.push({
+    name: 'inbox_conversation',
+    params: { conversation_id: conversationId },
+  });
+};
+
+const openContact = contact => {
+  router.push({ name: 'contacts_edit', params: { contactId: contact.id } });
+};
 
 const stageQuery = stage => {
   const marcados = {
@@ -136,9 +171,21 @@ onMounted(async () => {
 <template>
   <div class="flex flex-col w-full h-full overflow-hidden bg-n-background">
     <header class="flex items-center justify-between px-6 py-4">
-      <h1 class="text-xl font-medium text-n-slate-12">
-        {{ t('KANBAN.HEADER') }}
-      </h1>
+      <div class="flex items-baseline gap-4">
+        <h1 class="text-xl font-medium text-n-slate-12">
+          {{ t('KANBAN.HEADER') }}
+        </h1>
+        <!-- So o contrato FECHADO. Somar todas as colunas misturaria lead
+             descartado com venda real. -->
+        <div class="flex items-baseline gap-2">
+          <span class="text-xl font-semibold tabular-nums text-n-teal-11">
+            {{ formatCurrency(wonTotal) }}
+          </span>
+          <span class="text-xs text-n-slate-11">
+            {{ t('KANBAN.WON_SUMMARY', { count: wonCount }) }}
+          </span>
+        </div>
+      </div>
       <woot-button
         variant="clear"
         icon="arrow-clockwise"
@@ -182,29 +229,49 @@ onMounted(async () => {
         >
           <template #item="{ element }">
             <li
-              class="p-3 list-none cursor-grab rounded-lg bg-n-solid-1 border border-n-weak"
+              class="list-none rounded-lg bg-n-solid-1 border border-n-weak hover:border-n-slate-6"
             >
-              <p class="text-sm font-medium truncate text-n-slate-12">
-                {{ element.name }}
-              </p>
-              <p
-                v-if="element.phoneNumber"
-                class="text-xs truncate text-n-slate-11"
-              >
-                {{ element.phoneNumber }}
-              </p>
-              <p
-                v-if="element.customAttributes?.valorContrato"
-                class="mt-1 text-xs font-medium text-n-teal-11"
-              >
-                {{ formatCurrency(element.customAttributes.valorContrato) }}
-              </p>
-              <span
-                v-if="element.customAttributes?.utmSource"
-                class="inline-block px-2 py-0.5 mt-2 text-xs rounded-md bg-n-alpha-2 text-n-slate-11"
-              >
-                {{ element.customAttributes.utmSource }}
-              </span>
+              <div class="flex items-start justify-between gap-1 p-3 cursor-grab">
+                <!-- Clique no corpo abre a CONVERSA: e onde se le o papo e responde. -->
+                <button
+                  class="flex-1 min-w-0 text-left"
+                  :title="t('KANBAN.OPEN_CONVERSATION')"
+                  @click="openConversation(element)"
+                >
+                  <p class="text-sm font-medium truncate text-n-slate-12">
+                    {{ element.name }}
+                  </p>
+                  <p
+                    v-if="element.phoneNumber"
+                    class="text-xs truncate text-n-slate-11"
+                  >
+                    {{ element.phoneNumber }}
+                  </p>
+                  <p v-if="element.email" class="text-xs truncate text-n-slate-11">
+                    {{ element.email }}
+                  </p>
+                  <p
+                    v-if="element.customAttributes?.valorContrato"
+                    class="mt-1 text-xs font-medium text-n-teal-11"
+                  >
+                    {{ formatCurrency(element.customAttributes.valorContrato) }}
+                  </p>
+                  <span
+                    v-if="element.customAttributes?.utmSource"
+                    class="inline-block px-2 py-0.5 mt-2 text-xs rounded-md bg-n-alpha-2 text-n-slate-11"
+                  >
+                    {{ element.customAttributes.utmSource }}
+                  </span>
+                </button>
+                <!-- Acao secundaria: ficha do contato (onde se edita o Estagio). -->
+                <button
+                  class="flex items-center p-1 rounded-md shrink-0 text-n-slate-10 hover:bg-n-alpha-2 hover:text-n-slate-12"
+                  :title="t('KANBAN.OPEN_CONTACT')"
+                  @click.stop="openContact(element)"
+                >
+                  <span class="i-lucide-contact size-4" />
+                </button>
+              </div>
             </li>
           </template>
         </Draggable>
