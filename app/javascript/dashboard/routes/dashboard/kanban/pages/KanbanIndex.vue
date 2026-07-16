@@ -5,6 +5,7 @@ import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useI18n } from 'vue-i18n';
 import Draggable from 'vuedraggable';
 import { useAlert } from 'dashboard/composables';
+import StageEditor from '../components/StageEditor.vue';
 
 const store = useStore();
 const router = useRouter();
@@ -25,17 +26,58 @@ const columns = ref({});
 
 const contactAttributes = useMapGetter('attributes/getAttributesByModel');
 
-// As colunas saem do custom attribute `stage`. Adicionar um valor em
-// Configuracoes -> Atributos cria uma coluna nova, sem deploy.
+// A definicao do custom attribute `stage` — fonte da verdade das colunas
+// (conteudo E ordem vivem no array attributeValues).
+const stageDefinition = computed(() =>
+  contactAttributes
+    .value('contact_attribute')
+    ?.find(attribute => attribute.attributeKey === 'stage')
+);
+
 const stages = computed(() => {
-  const definition = contactAttributes.value('contact_attribute')?.find(
-    attribute => attribute.attributeKey === 'stage'
-  );
-  const values = definition?.attributeValues;
+  const values = stageDefinition.value?.attributeValues;
   return values?.length ? values : DEFAULT_STAGES;
 });
 
-const stageLabel = stage => t(`KANBAN.STAGES.${stage.toUpperCase()}`, stage);
+// Etapa custom (criada pelo usuario) nao tem chave de i18n: humaniza a chave
+// em vez de mostrar 'em_negociacao' cru.
+const stageLabel = stage =>
+  t(`KANBAN.STAGES.${stage.toUpperCase()}`, stage.replace(/_/g, ' '));
+
+// Etapas que o editor nao deixa remover: sem elas o board perde as regras
+// (a de entrada pesca quem nao tem estagio; a de venda pede o valor).
+const LOCKED_STAGES = [INBOX_STAGE, WON_STAGE];
+
+const isEditorOpen = ref(false);
+const isSavingStages = ref(false);
+
+const stageCounts = computed(() =>
+  stages.value.reduce((acc, stage) => {
+    acc[stage] = (columns.value[stage] || []).length;
+    return acc;
+  }, {})
+);
+
+const saveStages = async novosEstagios => {
+  if (!stageDefinition.value?.id) {
+    useAlert(t('KANBAN.EDITOR.NO_DEFINITION'));
+    return;
+  }
+  isSavingStages.value = true;
+  try {
+    await store.dispatch('attributes/update', {
+      id: stageDefinition.value.id,
+      attribute_values: novosEstagios,
+    });
+    isEditorOpen.value = false;
+    await fetchBoard();
+    useAlert(t('KANBAN.EDITOR.SAVED'));
+  } catch (error) {
+    useAlert(error.message || t('KANBAN.EDITOR.SAVE_ERROR'));
+  } finally {
+    isSavingStages.value = false;
+  }
+};
 
 const formatCurrency = value => {
   if (!value && value !== 0) return '';
@@ -186,15 +228,33 @@ onMounted(async () => {
           </span>
         </div>
       </div>
-      <woot-button
-        variant="clear"
-        icon="arrow-clockwise"
-        :is-loading="isLoading"
-        @click="fetchBoard"
-      >
-        {{ t('KANBAN.REFRESH') }}
-      </woot-button>
+      <div class="flex items-center gap-1">
+        <woot-button variant="clear" @click="isEditorOpen = true">
+          <span class="flex items-center gap-1.5">
+            <span class="i-lucide-settings-2 size-4" />
+            {{ t('KANBAN.EDITOR.OPEN') }}
+          </span>
+        </woot-button>
+        <woot-button
+          variant="clear"
+          icon="arrow-clockwise"
+          :is-loading="isLoading"
+          @click="fetchBoard"
+        >
+          {{ t('KANBAN.REFRESH') }}
+        </woot-button>
+      </div>
     </header>
+
+    <StageEditor
+      v-if="isEditorOpen"
+      :stages="stages"
+      :counts="stageCounts"
+      :locked-stages="LOCKED_STAGES"
+      :is-saving="isSavingStages"
+      @save="saveStages"
+      @close="isEditorOpen = false"
+    />
 
     <div class="flex flex-1 gap-4 px-6 pb-6 overflow-x-auto">
       <section

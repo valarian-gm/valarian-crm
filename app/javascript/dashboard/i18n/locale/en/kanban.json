@@ -15,6 +15,23 @@
     "WON_SUMMARY": "closed across {count} contract(s)",
     "OPEN_CONVERSATION": "Open conversation",
     "OPEN_CONTACT": "Open contact",
-    "NO_CONVERSATION": "This lead has no conversation yet."
+    "NO_CONVERSATION": "This lead has no conversation yet.",
+    "EDITOR": {
+      "OPEN": "Edit stages",
+      "TITLE": "Edit kanban stages",
+      "SUBTITLE": "Drag to reorder. Stages holding leads cannot be removed.",
+      "NEW_PLACEHOLDER": "New stage (e.g. Negotiating)",
+      "ADD": "Add",
+      "REMOVE": "Remove stage",
+      "CANCEL": "Cancel",
+      "SAVE": "Save",
+      "SAVED": "Stages updated.",
+      "SAVE_ERROR": "Could not save the stages.",
+      "DUPLICATE": "That stage already exists.",
+      "HAS_LEADS": "Holds {count} lead(s) — move them before removing.",
+      "LOCKED": "Structural stage: New catches incoming leads and Customer records the contract value.",
+      "HINT": "Stages become the board columns. New and Customer cannot be removed.",
+      "NO_DEFINITION": "The Stage attribute does not exist yet. Deploy again."
+    }
   }
 }

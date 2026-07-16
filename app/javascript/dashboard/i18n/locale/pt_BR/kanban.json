@@ -15,6 +15,23 @@
     "WON_SUMMARY": "fechado em {count} contrato(s)",
     "OPEN_CONVERSATION": "Abrir conversa",
     "OPEN_CONTACT": "Abrir ficha do contato",
-    "NO_CONVERSATION": "Esse lead ainda não tem conversa."
+    "NO_CONVERSATION": "Esse lead ainda não tem conversa.",
+    "EDITOR": {
+      "OPEN": "Editar etapas",
+      "TITLE": "Editar etapas do kanban",
+      "SUBTITLE": "Arraste para reordenar. Etapas com leads dentro não podem ser removidas.",
+      "NEW_PLACEHOLDER": "Nova etapa (ex: Em negociação)",
+      "ADD": "Adicionar",
+      "REMOVE": "Remover etapa",
+      "CANCEL": "Cancelar",
+      "SAVE": "Salvar",
+      "SAVED": "Etapas atualizadas.",
+      "SAVE_ERROR": "Não foi possível salvar as etapas.",
+      "DUPLICATE": "Essa etapa já existe.",
+      "HAS_LEADS": "Tem {count} lead(s) dentro — mova-os antes de remover.",
+      "LOCKED": "Etapa estrutural: Novo recebe os leads que chegam e Cliente registra o valor do contrato.",
+      "HINT": "As etapas viram as colunas do board. Novo e Cliente não podem ser removidas.",
+      "NO_DEFINITION": "O atributo Estágio ainda não existe. Faça um novo deploy."
+    }
   }
 }
