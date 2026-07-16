@@ -26,6 +26,7 @@ import inboxMgmt from './inboxMgmt.json';
 import integrationApps from './integrationApps.json';
 import integrations from './integrations.json';
 import labelsMgmt from './labelsMgmt.json';
+import kanban from './kanban.json';
 import login from './login.json';
 import macros from './macros.json';
 import mfa from './mfa.json';
@@ -72,6 +73,7 @@ export default {
   ...integrationApps,
   ...integrations,
   ...labelsMgmt,
+  ...kanban,
   ...login,
   ...macros,
   ...mfa,

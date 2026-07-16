@@ -1,0 +1,16 @@
+{
+  "KANBAN": {
+    "HEADER": "Leads kanban",
+    "REFRESH": "Refresh",
+    "MOVED": "{name} moved to {stage}.",
+    "MOVE_ERROR": "Could not move the lead. Try again.",
+    "CONTRACT_VALUE_PROMPT": "Contract value (BRL):",
+    "STAGES": {
+      "NOVO": "New",
+      "QUALIFICADO": "Qualified",
+      "CLIENTE": "Customer",
+      "NAO_RESPONDE": "No reply",
+      "EXCLUIR": "Exclude"
+    }
+  }
+}

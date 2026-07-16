@@ -1,0 +1,16 @@
+{
+  "KANBAN": {
+    "HEADER": "Kanban de leads",
+    "REFRESH": "Atualizar",
+    "MOVED": "{name} movido para {stage}.",
+    "MOVE_ERROR": "Não foi possível mover o lead. Tente de novo.",
+    "CONTRACT_VALUE_PROMPT": "Valor do contrato (R$):",
+    "STAGES": {
+      "NOVO": "Novo",
+      "QUALIFICADO": "Qualificado",
+      "CLIENTE": "Cliente",
+      "NAO_RESPONDE": "Não responde",
+      "EXCLUIR": "Excluir"
+    }
+  }
+}
