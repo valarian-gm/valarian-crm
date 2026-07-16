@@ -1,7 +1,24 @@
 # Deploy — CRM Valarian no EasyPanel (VPS)
 
 > Fork do Chatwoot (`valarian-gm/valarian-crm`). Domínio alvo: `crm.valariangm.com.br`.
+
+## ⚡ Caminho rápido (recomendado) — Compose
+
+Use **[`docker-compose.easypanel.yml`](docker-compose.easypanel.yml)**: EasyPanel → Project → **+ Service → Compose** → cola o arquivo → troca os 3 placeholders de senha → **Deploy**. Sobe os 4 serviços e **roda a migration sozinho** (o `db:chatwoot_prepare` é idempotente: instala na 1ª vez, migra nas seguintes). Depois é só apontar o domínio pro serviço `rails`, **porta 3000**.
+
+O guia manual abaixo fica como referência de o que cada peça faz (e para debugar quando algo quebra).
+
+---
+
+## Guia manual (serviço a serviço)
+
 > Estratégia em 2 fases: **F0** valida infra com a imagem oficial; **F1** troca pra imagem do NOSSO fork (mesmo banco, sem perder nada). A troca é só o campo "Image".
+
+### ⚠️ As 3 armadilhas que custaram caro (documentadas para não repetir)
+
+1. **O Dockerfile do Chatwoot não tem `CMD` nem `ENTRYPOINT`.** Sem informar o Command, o container sobe, não tem processo, e sai com **exit 0** (`Complete`, sem erro, log vazio). Web: `sh -c "docker/entrypoints/rails.sh bundle exec rails s -p 3000 -b 0.0.0.0"` · Worker: `sh -c "docker/entrypoints/rails.sh bundle exec sidekiq -C config/sidekiq.yml"`.
+2. **O proxy precisa saber a porta.** Em Domains, defina **3000** — o padrão é 80 e dá "Service is not reachable". Sem domínio cadastrado, dá **404** e o certificado fica `CN=Easypanel` (auto-assinado) em vez de Let's Encrypt.
+3. **Postgres tem que ser `pgvector/pgvector:pg16`.** O Postgres padrão não serve.
 
 ## Arquitetura (4 serviços no mesmo projeto EasyPanel)
 

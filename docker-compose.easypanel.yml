@@ -1,0 +1,104 @@
+# ==============================================================================
+# CRM Valarian — stack completa, auto-instalável
+# ==============================================================================
+# Cola este arquivo em: EasyPanel -> Project -> + Service -> Compose
+#
+# ANTES DE SUBIR, troque os 3 placeholders abaixo (gere no servidor):
+#   openssl rand -hex 64   -> TROQUE_SECRET_KEY_BASE
+#   openssl rand -hex 24   -> TROQUE_SENHA_POSTGRES
+#   openssl rand -hex 24   -> TROQUE_SENHA_REDIS
+#
+# Depois: Deploy. A migration roda sozinha no boot (db:chatwoot_prepare é
+# idempotente: instala na 1a vez, migra nas seguintes). Nao precisa console.
+#
+# Por fim, no EasyPanel: aponte o dominio para o servico `rails`, porta 3000.
+# ==============================================================================
+
+x-app: &app
+  # Imagem do nosso fork (privada). Configure a credencial do ghcr.io no
+  # EasyPanel (Settings -> Registries): user = seu login GitHub,
+  # senha = PAT classic com escopo read:packages.
+  image: ghcr.io/valarian-gm/valarian-crm:develop
+  restart: always
+  depends_on:
+    - postgres
+    - redis
+  # O Dockerfile do Chatwoot NAO define CMD nem ENTRYPOINT — quem manda o
+  # processo e este arquivo. Sem isso o container sobe e morre com exit 0.
+  entrypoint: docker/entrypoints/rails.sh
+  environment: &app_env
+    RAILS_ENV: production
+    NODE_ENV: production
+    INSTALLATION_ENV: docker
+    SECRET_KEY_BASE: TROQUE_SECRET_KEY_BASE
+
+    FRONTEND_URL: https://crm.valariangm.com.br
+    DEFAULT_LOCALE: pt_BR
+    FORCE_SSL: "true"
+    ENABLE_ACCOUNT_SIGNUP: "false"
+
+    # Banco (host = nome do servico dentro do compose)
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+    POSTGRES_DATABASE: chatwoot
+    POSTGRES_USERNAME: chatwoot
+    POSTGRES_PASSWORD: TROQUE_SENHA_POSTGRES
+
+    REDIS_URL: redis://:TROQUE_SENHA_REDIS@redis:6379
+
+    ACTIVE_STORAGE_SERVICE: local
+
+    # Desliga os modulos enterprise (SLA, Audit Logs, Custom Roles).
+    # ChatwootApp.enterprise? respeita esta env — poda sem tocar codigo.
+    DISABLE_ENTERPRISE: "true"
+
+    # Facebook / Instagram: preencha para acender esses canais.
+    # Os 4 valores saem do mesmo app no Meta for Developers.
+    # FB_APP_ID: ""
+    # FB_APP_SECRET: ""
+    # FB_VERIFY_TOKEN: ""
+    # IG_VERIFY_TOKEN: ""
+
+services:
+  rails:
+    <<: *app
+    environment:
+      <<: *app_env
+    # Instala/migra e sobe o servidor. Idempotente: pode rodar todo boot.
+    command: ["sh", "-c", "bundle exec rails db:chatwoot_prepare && bundle exec rails s -p 3000 -b 0.0.0.0"]
+    volumes:
+      - storage_data:/app/storage
+    ports:
+      - "3000"
+
+  sidekiq:
+    <<: *app
+    environment:
+      <<: *app_env
+    # NAO roda migration aqui — so o `rails` migra, para nao haver corrida.
+    command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+    volumes:
+      - storage_data:/app/storage
+
+  postgres:
+    # pgvector e obrigatorio (o Chatwoot usa embeddings). Postgres puro nao serve.
+    image: pgvector/pgvector:pg16
+    restart: always
+    environment:
+      POSTGRES_DB: chatwoot
+      POSTGRES_USER: chatwoot
+      POSTGRES_PASSWORD: TROQUE_SENHA_POSTGRES
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: ["sh", "-c", "redis-server --requirepass \"TROQUE_SENHA_REDIS\""]
+    volumes:
+      - redis_data:/data
+
+volumes:
+  storage_data:
+  postgres_data:
+  redis_data:
