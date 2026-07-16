@@ -1,47 +1,25 @@
 # Customizacoes Valarian.
-# Idempotente: pode rodar a cada deploy sem duplicar nada.
-namespace :valarian do
-  # Os estagios do kanban de leads.
-  # SEMPRE minusculo: Contacts::FilterService faz downcase nos valores e o SQL
-  # aplica LOWER() — 'Nao Responde' nunca casaria no filtro.
-  KANBAN_STAGES = %w[novo qualificado cliente nao_responde excluir].freeze
+#
+# Pendura o setup do kanban no db:migrate — mesmo padrao que o Chatwoot usa em
+# db_enhancements.rake pra carregar a installation config. Como o boot roda
+# `db:chatwoot_prepare` (que chama db:migrate), os custom attributes se criam
+# sozinhos a cada deploy. Ninguem precisa abrir console.
+#
+# Conta criada DEPOIS do boot (instalacao nova) e coberta pelo
+# ValarianKanbanListener, que escuta ACCOUNT_CREATED.
+Rake::Task['db:migrate'].enhance do
+  if ActiveRecord::Base.connection.table_exists?('custom_attribute_definitions') &&
+     ActiveRecord::Base.connection.table_exists?('accounts')
+    Rake::Task['valarian:setup_kanban'].invoke
+  end
+end
 
+namespace :valarian do
   desc 'Cria os custom attributes do kanban de leads (stage, valor_contrato)'
   task setup_kanban: :environment do
     Account.find_each do |account|
-      seed_stage(account)
-      seed_valor_contrato(account)
-      puts "  ✔ #{account.name} (##{account.id})"
+      Valarian::KanbanSetup.call(account)
+      puts "  ✔ kanban pronto: #{account.name} (##{account.id})"
     end
-  end
-
-  def seed_stage(account)
-    attr = CustomAttributeDefinition.find_or_initialize_by(
-      attribute_key: 'stage',
-      attribute_model: 'contact_attribute',
-      account: account
-    )
-    attr.attribute_display_name = 'Estágio'
-    attr.attribute_description = 'Estágio do lead no funil (kanban)'
-    # 'list' = valor unico dentre opcoes fechadas. Editavel depois em
-    # Configuracoes -> Atributos: adicionar valor = adicionar coluna, sem deploy.
-    attr.attribute_display_type = 'list'
-    # Preserva estagios que o usuario tenha criado na UI; so garante os padroes.
-    attr.attribute_values = (Array(attr.attribute_values) | KANBAN_STAGES)
-    attr.save!
-  end
-
-  def seed_valor_contrato(account)
-    attr = CustomAttributeDefinition.find_or_initialize_by(
-      attribute_key: 'valor_contrato',
-      attribute_model: 'contact_attribute',
-      account: account
-    )
-    attr.attribute_display_name = 'Valor do contrato'
-    attr.attribute_description = 'Valor fechado com o cliente (alimenta o evento de venda na Meta)'
-    # 'number', NUNCA 'currency': FilterService::ATTRIBUTE_TYPES nao mapeia
-    # currency, o cast SQL sai vazio ('::') e o filtro quebra. R$ e formatado no front.
-    attr.attribute_display_type = 'number'
-    attr.save!
   end
 end
