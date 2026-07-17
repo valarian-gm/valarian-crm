@@ -48,6 +48,12 @@
     "PANEL": {
       "PICK_STAGE": "Pick a stage",
       "ARCHIVED_NOTE": "Lost lead: hidden on the kanban."
-    }
+    },
+    "DATE_FROM": "Leads from",
+    "DATE_TO": "Leads until",
+    "DATE_CLEAR": "Clear date filter",
+    "TODAY": "today",
+    "DAYS_AGO": "{count}d",
+    "IDLE_HINT": "Time since last activity"
   }
 }

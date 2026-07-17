@@ -5,6 +5,8 @@ import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useI18n } from 'vue-i18n';
 import Draggable from 'vuedraggable';
 import { useAlert } from 'dashboard/composables';
+import Button from 'dashboard/components-next/button/Button.vue';
+import Avatar from 'dashboard/components-next/avatar/Avatar.vue';
 import StageEditor from '../components/StageEditor.vue';
 
 const store = useStore();
@@ -51,6 +53,12 @@ const LOCKED_STAGES = [INBOX_STAGE, WON_STAGE];
 
 const isEditorOpen = ref(false);
 const isSavingStages = ref(false);
+
+const limparDatas = () => {
+  dateFrom.value = '';
+  dateTo.value = '';
+  fetchBoard();
+};
 
 const stageCounts = computed(() =>
   stages.value.reduce((acc, stage) => {
@@ -136,8 +144,31 @@ const normalize = contact => ({
   name: contact.name,
   email: contact.email,
   phoneNumber: contact.phone_number,
+  thumbnail: contact.thumbnail,
+  createdAt: contact.created_at,
+  lastActivityAt: contact.last_activity_at,
   customAttributes: contact.custom_attributes || {},
 });
+
+// "há quanto tempo parado" — o dado que faltava no card. Lead esquecido no
+// funil e o que mais custa dinheiro.
+const tempoParado = contact => {
+  const stamp = contact.lastActivityAt || contact.createdAt;
+  if (!stamp) return '';
+  const segundos = Number(stamp) > 1e12 ? Number(stamp) / 1000 : Number(stamp);
+  const dias = Math.floor((Date.now() / 1000 - segundos) / 86400);
+  if (Number.isNaN(dias) || dias < 0) return '';
+  if (dias === 0) return t('KANBAN.TODAY');
+  return t('KANBAN.DAYS_AGO', { count: dias });
+};
+
+// Alerta visual: lead parado ha muito tempo.
+const estaFrio = contact => {
+  const stamp = contact.lastActivityAt || contact.createdAt;
+  if (!stamp) return false;
+  const segundos = Number(stamp) > 1e12 ? Number(stamp) / 1000 : Number(stamp);
+  return (Date.now() / 1000 - segundos) / 86400 > 7;
+};
 
 const valorDe = contact => Number(contact.customAttributes?.valor_contrato || 0);
 const utmDe = contact => contact.customAttributes?.utm_source;
@@ -161,36 +192,78 @@ const archivedCount = computed(() =>
   )
 );
 
-const stageQuery = stage => {
-  const marcados = {
-    attribute_key: 'stage',
-    filter_operator: 'equal_to',
-    values: [stage],
-    query_operator: null,
-  };
-  if (stage !== INBOX_STAGE) return [marcados];
+// Filtro por data de ENTRADA do lead (created_at) — a data que casa com
+// campanha/UTM e alimenta o CAC.
+const dateFrom = ref('');
+const dateTo = ref('');
+const hasDateFilter = computed(() => Boolean(dateFrom.value || dateTo.value));
 
-  // Coluna de entrada: "sem estagio" OR "marcado como novo".
-  // is_not_present vira `IS NULL` no SQL (FilterService#filter_operation).
-  return [
-    {
-      attribute_key: 'stage',
-      filter_operator: 'is_not_present',
-      values: [],
-      query_operator: 'OR',
-    },
-    marcados,
-  ];
+const dateConditions = () => {
+  const conditions = [];
+  if (dateFrom.value) {
+    conditions.push({
+      attribute_key: 'created_at',
+      filter_operator: 'is_greater_than',
+      values: [dateFrom.value],
+    });
+  }
+  if (dateTo.value) {
+    conditions.push({
+      attribute_key: 'created_at',
+      filter_operator: 'is_less_than',
+      values: [dateTo.value],
+    });
+  }
+  return conditions;
+};
+
+// O FilterService concatena as condicoes SEM parenteses
+// (query_builder: @query_string += " #{...}"). Como AND tem precedencia sobre
+// OR, `A OR B AND C` vira `A OR (B AND C)` — por isso NUNCA misturamos OR com
+// o filtro de data no mesmo payload (ver fetchStage).
+const buildPayload = conditions =>
+  conditions.map((condition, index) => ({
+    ...condition,
+    query_operator: index === conditions.length - 1 ? null : 'AND',
+  }));
+
+const runFilter = async conditions => {
+  const contacts = await store.dispatch('contacts/filter', {
+    queryPayload: { payload: buildPayload(conditions) },
+    // resetState: false — nao limpa a lista global entre colunas.
+    resetState: false,
+  });
+  return (contacts || []).map(normalize);
+};
+
+const stageIs = stage => ({
+  attribute_key: 'stage',
+  filter_operator: 'equal_to',
+  values: [stage],
+});
+const stageAusente = {
+  attribute_key: 'stage',
+  filter_operator: 'is_not_present',
+  values: [],
 };
 
 const fetchStage = async stage => {
-  const queryPayload = { payload: stageQuery(stage) };
-  // resetState: false — nao limpa a lista global entre colunas.
-  const contacts = await store.dispatch('contacts/filter', {
-    queryPayload,
-    resetState: false,
-  });
-  columns.value[stage] = (contacts || []).map(normalize);
+  const datas = dateConditions();
+
+  if (stage !== INBOX_STAGE) {
+    columns.value[stage] = await runFilter([stageIs(stage), ...datas]);
+    return;
+  }
+
+  // Coluna de entrada = "sem estagio" OU "marcado como novo". Como nao da pra
+  // usar OR junto do AND da data (precedencia), sao DUAS queries + merge.
+  const [semEstagio, marcados] = await Promise.all([
+    runFilter([stageAusente, ...datas]),
+    runFilter([stageIs(stage), ...datas]),
+  ]);
+  const porId = new Map();
+  [...semEstagio, ...marcados].forEach(contact => porId.set(contact.id, contact));
+  columns.value[stage] = [...porId.values()];
 };
 
 const fetchBoard = async () => {
@@ -295,49 +368,79 @@ onMounted(async () => {
 
 <template>
   <div class="flex flex-col w-full h-full overflow-hidden bg-n-background">
-    <header class="flex items-center justify-between px-6 py-4">
-      <div class="flex items-baseline gap-4">
-        <h1 class="text-xl font-medium text-n-slate-12">
-          {{ t('KANBAN.HEADER') }}
-        </h1>
-        <!-- So o contrato FECHADO. Somar todas as colunas misturaria lead
-             descartado com venda real. -->
-        <div class="flex items-baseline gap-2">
-          <span class="text-xl font-semibold tabular-nums text-n-teal-11">
-            {{ formatCurrency(wonTotal) }}
+    <header class="sticky top-0 z-10 px-6 bg-n-background">
+      <div class="flex items-center justify-between w-full gap-2 py-6">
+        <div class="flex items-baseline gap-3 min-w-0">
+          <span class="text-xl font-medium truncate text-n-slate-12">
+            {{ t('KANBAN.HEADER') }}
           </span>
-          <span class="text-xs text-n-slate-11">
-            {{ t('KANBAN.WON_SUMMARY', { count: wonCount }) }}
+          <!-- So o contrato FECHADO: somar todas as colunas misturaria lead
+               descartado com venda real. -->
+          <span
+            v-if="wonTotal > 0"
+            class="text-sm font-medium tabular-nums text-n-teal-11 shrink-0"
+          >
+            {{ formatCurrency(wonTotal) }}
+            <span class="font-normal text-n-slate-11">
+              · {{ t('KANBAN.WON_SUMMARY', { count: wonCount }) }}
+            </span>
           </span>
         </div>
-      </div>
-      <div class="flex items-center gap-1">
-        <woot-button
-          :variant="showArchived ? 'smooth' : 'clear'"
-          @click="showArchived = !showArchived"
-        >
-          <span class="flex items-center gap-1.5">
-            <span
-              :class="showArchived ? 'i-lucide-eye' : 'i-lucide-eye-off'"
-              class="size-4"
+
+        <div class="flex items-center flex-shrink-0 gap-2">
+          <div class="flex items-center gap-1">
+            <input
+              v-model="dateFrom"
+              type="date"
+              class="!mb-0 !h-8 !text-xs !w-32"
+              :title="t('KANBAN.DATE_FROM')"
+              @change="fetchBoard"
             />
-            {{ t('KANBAN.SHOW_ARCHIVED', { count: archivedCount }) }}
-          </span>
-        </woot-button>
-        <woot-button variant="clear" @click="isEditorOpen = true">
-          <span class="flex items-center gap-1.5">
-            <span class="i-lucide-settings-2 size-4" />
-            {{ t('KANBAN.EDITOR.OPEN') }}
-          </span>
-        </woot-button>
-        <woot-button
-          variant="clear"
-          icon="arrow-clockwise"
-          :is-loading="isLoading"
-          @click="fetchBoard"
-        >
-          {{ t('KANBAN.REFRESH') }}
-        </woot-button>
+            <span class="text-xs text-n-slate-10">–</span>
+            <input
+              v-model="dateTo"
+              type="date"
+              class="!mb-0 !h-8 !text-xs !w-32"
+              :title="t('KANBAN.DATE_TO')"
+              @change="fetchBoard"
+            />
+            <Button
+              v-if="hasDateFilter"
+              variant="ghost"
+              color="slate"
+              size="sm"
+              icon="i-lucide-x"
+              :title="t('KANBAN.DATE_CLEAR')"
+              @click="limparDatas"
+            />
+          </div>
+          <Button
+            :variant="showArchived ? 'faded' : 'ghost'"
+            color="slate"
+            size="sm"
+            :icon="showArchived ? 'i-lucide-eye' : 'i-lucide-eye-off'"
+            :label="String(archivedCount)"
+            :title="t('KANBAN.SHOW_ARCHIVED', { count: archivedCount })"
+            @click="showArchived = !showArchived"
+          />
+          <Button
+            variant="ghost"
+            color="slate"
+            size="sm"
+            icon="i-lucide-settings-2"
+            :title="t('KANBAN.EDITOR.OPEN')"
+            @click="isEditorOpen = true"
+          />
+          <Button
+            variant="ghost"
+            color="slate"
+            size="sm"
+            icon="i-lucide-refresh-cw"
+            :is-loading="isLoading"
+            :title="t('KANBAN.REFRESH')"
+            @click="fetchBoard"
+          />
+        </div>
       </div>
     </header>
 
@@ -387,47 +490,55 @@ onMounted(async () => {
         >
           <template #item="{ element }">
             <li
-              class="list-none transition-opacity border rounded-lg bg-n-solid-1 border-n-weak hover:border-n-slate-6"
+              class="relative list-none transition-all border rounded-lg group cursor-grab bg-n-solid-1 border-n-weak hover:border-n-slate-6 hover:shadow-sm"
               :class="{ 'opacity-40 grayscale': arquivadoDe(element) }"
             >
-              <div class="flex items-start justify-between gap-1 p-3 cursor-grab">
-                <!-- Clique no corpo abre a CONVERSA: e onde se le o papo e responde. -->
-                <button
-                  class="flex-1 min-w-0 text-left"
-                  :title="t('KANBAN.OPEN_CONVERSATION')"
-                  @click="openConversation(element)"
-                >
-                  <p class="text-sm font-medium truncate text-n-slate-12">
+              <!-- Corpo: clique abre a CONVERSA (onde se le o papo e responde) -->
+              <button
+                class="w-full p-3 text-left"
+                :title="t('KANBAN.OPEN_CONVERSATION')"
+                @click="openConversation(element)"
+              >
+                <!-- Linha 1: quem e (avatar + nome) -->
+                <div class="flex items-center gap-2">
+                  <Avatar
+                    :name="element.name"
+                    :src="element.thumbnail"
+                    :size="24"
+                    rounded-full
+                  />
+                  <span class="flex-1 text-sm font-medium truncate text-n-slate-12">
                     {{ element.name }}
-                  </p>
-                  <p
-                    v-if="element.phoneNumber"
-                    class="text-xs truncate text-n-slate-11"
-                  >
-                    {{ element.phoneNumber }}
-                  </p>
-                  <p v-if="element.email" class="text-xs truncate text-n-slate-11">
-                    {{ element.email }}
-                  </p>
+                  </span>
+                </div>
+
+                <!-- Linha 2: como falar (um so — telefone manda) -->
+                <p class="mt-1.5 text-xs truncate text-n-slate-11">
+                  {{ element.phoneNumber || element.email }}
+                </p>
+
+                <!-- Linha 3: sinais — de onde veio e ha quanto tempo esta parado -->
+                <div class="flex items-center gap-1.5 mt-2 text-xs">
                   <span
                     v-if="utmDe(element)"
-                    class="inline-block px-2 py-0.5 mt-2 text-xs rounded-md bg-n-alpha-2 text-n-slate-11"
+                    class="px-1.5 py-0.5 rounded truncate max-w-24 bg-n-alpha-2 text-n-slate-11"
+                    :title="utmDe(element)"
                   >
                     {{ utmDe(element) }}
                   </span>
-                </button>
-                <!-- Acao secundaria: ficha do contato (onde se edita o Estagio). -->
-                <button
-                  class="flex items-center p-1 rounded-md shrink-0 text-n-slate-10 hover:bg-n-alpha-2 hover:text-n-slate-12"
-                  :title="t('KANBAN.OPEN_CONTACT')"
-                  @click.stop="openContact(element)"
-                >
-                  <span class="i-lucide-contact size-4" />
-                </button>
-              </div>
+                  <span
+                    v-if="tempoParado(element)"
+                    class="ms-auto shrink-0"
+                    :class="estaFrio(element) ? 'text-n-amber-11' : 'text-n-slate-10'"
+                    :title="t('KANBAN.IDLE_HINT')"
+                  >
+                    {{ tempoParado(element) }}
+                  </span>
+                </div>
+              </button>
 
-              <!-- Valor editavel no proprio card -->
-              <div class="px-3 pb-2">
+              <!-- Valor: so aparece se existe, ou no hover pra adicionar -->
+              <div class="px-3 pb-2 -mt-1">
                 <input
                   v-if="editandoValor === element.id"
                   v-model="rascunhoValor"
@@ -442,50 +553,57 @@ onMounted(async () => {
                   @keyup.esc="editandoValor = null"
                 />
                 <button
-                  v-else
-                  class="text-xs font-medium tabular-nums hover:underline"
-                  :class="valorDe(element) > 0 ? 'text-n-teal-11' : 'text-n-slate-10'"
+                  v-else-if="valorDe(element) > 0"
+                  class="text-sm font-semibold tabular-nums text-n-teal-11 hover:underline"
                   :title="t('KANBAN.EDIT_VALUE')"
                   @click.stop="abrirEdicaoValor(element)"
                 >
-                  {{
-                    valorDe(element) > 0
-                      ? formatCurrency(valorDe(element))
-                      : t('KANBAN.ADD_VALUE')
-                  }}
+                  {{ formatCurrency(valorDe(element)) }}
+                </button>
+                <button
+                  v-else
+                  class="text-xs transition-opacity opacity-0 text-n-slate-10 group-hover:opacity-100 hover:underline"
+                  @click.stop="abrirEdicaoValor(element)"
+                >
+                  {{ t('KANBAN.ADD_VALUE') }}
                 </button>
               </div>
 
-              <!-- Acoes rapidas -->
+              <!-- Acoes: so no hover, pra o card respirar -->
               <div
-                class="flex items-center gap-1 px-3 py-2 border-t border-n-weak"
+                class="absolute flex items-center gap-0.5 transition-opacity opacity-0 top-2 end-2 group-hover:opacity-100 focus-within:opacity-100"
               >
                 <template v-if="arquivadoDe(element)">
                   <button
-                    class="flex items-center gap-1 px-2 py-1 text-xs rounded-md text-n-slate-11 hover:bg-n-alpha-2"
+                    class="p-1 rounded shrink-0 bg-n-solid-2 text-n-slate-11 hover:text-n-slate-12"
+                    :title="t('KANBAN.RESTORE')"
                     @click.stop="restaurar(element)"
                   >
-                    <span class="i-lucide-undo-2 size-3" />
-                    {{ t('KANBAN.RESTORE') }}
+                    <span class="i-lucide-undo-2 size-3.5" />
                   </button>
                 </template>
                 <template v-else>
                   <button
                     v-if="stage !== WON_STAGE"
-                    class="flex items-center gap-1 px-2 py-1 text-xs rounded-md text-n-teal-11 hover:bg-n-teal-3"
+                    class="p-1 rounded shrink-0 bg-n-solid-2 text-n-slate-10 hover:text-n-teal-11"
                     :title="t('KANBAN.WON_HINT')"
                     @click.stop="marcarGanho(element)"
                   >
-                    <span class="i-lucide-circle-check size-3" />
-                    {{ t('KANBAN.WON') }}
+                    <span class="i-lucide-circle-check size-3.5" />
                   </button>
                   <button
-                    class="flex items-center gap-1 px-2 py-1 text-xs rounded-md text-n-slate-10 hover:bg-n-alpha-2 hover:text-n-ruby-10"
+                    class="p-1 rounded shrink-0 bg-n-solid-2 text-n-slate-10 hover:text-n-ruby-10"
                     :title="t('KANBAN.LOST_HINT')"
                     @click.stop="marcarPerdido(element)"
                   >
-                    <span class="i-lucide-circle-x size-3" />
-                    {{ t('KANBAN.LOST') }}
+                    <span class="i-lucide-circle-x size-3.5" />
+                  </button>
+                  <button
+                    class="p-1 rounded shrink-0 bg-n-solid-2 text-n-slate-10 hover:text-n-slate-12"
+                    :title="t('KANBAN.OPEN_CONTACT')"
+                    @click.stop="openContact(element)"
+                  >
+                    <span class="i-lucide-contact size-3.5" />
                   </button>
                 </template>
               </div>

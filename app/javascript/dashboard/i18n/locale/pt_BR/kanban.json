@@ -48,6 +48,12 @@
     "PANEL": {
       "PICK_STAGE": "Selecione o estágio",
       "ARCHIVED_NOTE": "Lead perdido: oculto no kanban."
-    }
+    },
+    "DATE_FROM": "Leads a partir de",
+    "DATE_TO": "Leads até",
+    "DATE_CLEAR": "Limpar filtro de data",
+    "TODAY": "hoje",
+    "DAYS_AGO": "{count}d",
+    "IDLE_HINT": "Tempo desde a última atividade"
   }
 }
