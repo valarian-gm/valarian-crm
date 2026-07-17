@@ -26,16 +26,17 @@ const columns = ref({});
 
 const contactAttributes = useMapGetter('attributes/getAttributesByModel');
 
-// A definicao do custom attribute `stage` — fonte da verdade das colunas
-// (conteudo E ordem vivem no array attributeValues).
+// ATENCAO ao shape: o getter `getAttributesByModel` NAO cameliza (diferente dos
+// vizinhos getContactAttributes/getCompanyAttributes, que fazem .map(camelcaseKeys)).
+// Aqui os campos chegam em snake_case: attribute_key, attribute_values.
 const stageDefinition = computed(() =>
   contactAttributes
     .value('contact_attribute')
-    ?.find(attribute => attribute.attributeKey === 'stage')
+    ?.find(attribute => attribute.attribute_key === 'stage')
 );
 
 const stages = computed(() => {
-  const values = stageDefinition.value?.attributeValues;
+  const values = stageDefinition.value?.attribute_values;
   return values?.length ? values : DEFAULT_STAGES;
 });
 
@@ -89,10 +90,7 @@ const formatCurrency = value => {
 };
 
 const columnTotal = stage =>
-  (columns.value[stage] || []).reduce(
-    (sum, contact) => sum + Number(contact.customAttributes?.valorContrato || 0),
-    0
-  );
+  (columns.value[stage] || []).reduce((sum, contact) => sum + valorDe(contact), 0);
 
 // Total do topo = so a coluna Cliente. Somar todas as colunas misturaria o que
 // nao deve (lead em 'excluir' com valor entraria na conta); o numero que importa
@@ -127,6 +125,22 @@ const openContact = contact => {
   router.push({ name: 'contacts_edit', params: { contactId: contact.id } });
 };
 
+// `contacts/filter` devolve o payload CRU da API (snake_case), sem passar pelo
+// getter que cameliza. Normaliza num lugar so.
+// Nota: as chaves DENTRO de custom_attributes ficam snake_case de proposito —
+// ate o getter oficial usa stopPaths: ['custom_attributes'] (sao chaves criadas
+// pelo usuario, nao devem ser transformadas).
+const normalize = contact => ({
+  id: contact.id,
+  name: contact.name,
+  email: contact.email,
+  phoneNumber: contact.phone_number,
+  customAttributes: contact.custom_attributes || {},
+});
+
+const valorDe = contact => Number(contact.customAttributes?.valor_contrato || 0);
+const utmDe = contact => contact.customAttributes?.utm_source;
+
 const stageQuery = stage => {
   const marcados = {
     attribute_key: 'stage',
@@ -156,7 +170,7 @@ const fetchStage = async stage => {
     queryPayload,
     resetState: false,
   });
-  columns.value[stage] = contacts || [];
+  columns.value[stage] = (contacts || []).map(normalize);
 };
 
 const fetchBoard = async () => {
@@ -185,7 +199,7 @@ const onDrop = async (event, stage) => {
   if (!contact) return;
 
   let valorContrato;
-  if (stage === WON_STAGE && !contact.customAttributes?.valorContrato) {
+  if (stage === WON_STAGE && !valorDe(contact)) {
     const input = window.prompt(t('KANBAN.CONTRACT_VALUE_PROMPT'));
     if (input === null) {
       await fetchBoard(); // cancelou: desfaz o movimento visual
@@ -262,20 +276,23 @@ onMounted(async () => {
         :key="stage"
         class="flex flex-col flex-shrink-0 w-72 rounded-xl bg-n-solid-2"
       >
-        <div class="flex items-center justify-between px-4 py-3">
-          <span class="text-sm font-medium text-n-slate-12">
-            {{ stageLabel(stage) }}
-          </span>
-          <span class="text-xs tabular-nums text-n-slate-11">
-            {{ (columns[stage] || []).length }}
-          </span>
-        </div>
-
-        <div
-          v-if="stage === WON_STAGE && columnTotal(stage) > 0"
-          class="px-4 pb-2 text-xs font-medium text-n-teal-11"
-        >
-          {{ formatCurrency(columnTotal(stage)) }}
+        <div class="px-4 py-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium capitalize text-n-slate-12">
+              {{ stageLabel(stage) }}
+            </span>
+            <span class="text-xs tabular-nums text-n-slate-11">
+              {{ (columns[stage] || []).length }}
+            </span>
+          </div>
+          <!-- Soma da propria etapa: cada coluna mostra quanto tem nela. -->
+          <div
+            v-if="columnTotal(stage) > 0"
+            class="mt-0.5 text-xs font-medium tabular-nums"
+            :class="stage === WON_STAGE ? 'text-n-teal-11' : 'text-n-slate-11'"
+          >
+            {{ formatCurrency(columnTotal(stage)) }}
+          </div>
         </div>
 
         <Draggable
@@ -311,16 +328,16 @@ onMounted(async () => {
                     {{ element.email }}
                   </p>
                   <p
-                    v-if="element.customAttributes?.valorContrato"
-                    class="mt-1 text-xs font-medium text-n-teal-11"
+                    v-if="valorDe(element) > 0"
+                    class="mt-1 text-xs font-medium tabular-nums text-n-teal-11"
                   >
-                    {{ formatCurrency(element.customAttributes.valorContrato) }}
+                    {{ formatCurrency(valorDe(element)) }}
                   </p>
                   <span
-                    v-if="element.customAttributes?.utmSource"
+                    v-if="utmDe(element)"
                     class="inline-block px-2 py-0.5 mt-2 text-xs rounded-md bg-n-alpha-2 text-n-slate-11"
                   >
-                    {{ element.customAttributes.utmSource }}
+                    {{ utmDe(element) }}
                   </span>
                 </button>
                 <!-- Acao secundaria: ficha do contato (onde se edita o Estagio). -->
