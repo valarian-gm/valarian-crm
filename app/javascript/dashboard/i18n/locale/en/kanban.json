@@ -44,6 +44,10 @@
     "RESTORED": "{name} restored.",
     "EDIT_VALUE": "Edit contract value",
     "ADD_VALUE": "+ value",
-    "VALUE_PLACEHOLDER": "Value in BRL"
+    "VALUE_PLACEHOLDER": "Value in BRL",
+    "PANEL": {
+      "PICK_STAGE": "Pick a stage",
+      "ARCHIVED_NOTE": "Lost lead: hidden on the kanban."
+    }
   }
 }

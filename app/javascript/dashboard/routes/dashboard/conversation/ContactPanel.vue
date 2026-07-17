@@ -14,6 +14,8 @@ import ContactConversations from './ContactConversations.vue';
 import ConversationAction from './ConversationAction.vue';
 import ConversationParticipant from './ConversationParticipant.vue';
 import ContactInfo from './contact/ContactInfo.vue';
+// [valarian] qualificar o lead sem sair da conversa
+import LeadStagePanel from './contact/LeadStagePanel.vue';
 import ContactNotes from './contact/ContactNotes.vue';
 import ConversationInfo from './ConversationInfo.vue';
 import CustomAttributes from './customAttributes/CustomAttributes.vue';
@@ -138,6 +140,10 @@ onMounted(() => {
       @close="closeContactPanel"
     />
     <ContactInfo :contact="contact" :channel-type="channelType" />
+    <!-- [valarian] atalho do kanban: fica FORA da lista arrastavel de propósito,
+         pra estar sempre visivel. O accordion nativo de atributos nasce fechado
+         e o Estagio ficava enterrado a tres cliques. -->
+    <LeadStagePanel v-if="contact.id" :contact-id="contact.id" />
     <div class="px-2 pb-8 list-group">
       <Draggable
         :list="conversationSidebarItems"

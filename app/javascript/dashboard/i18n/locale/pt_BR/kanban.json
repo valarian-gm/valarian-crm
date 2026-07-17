@@ -44,6 +44,10 @@
     "RESTORED": "{name} restaurado.",
     "EDIT_VALUE": "Editar valor do contrato",
     "ADD_VALUE": "+ valor",
-    "VALUE_PLACEHOLDER": "Valor em R$"
+    "VALUE_PLACEHOLDER": "Valor em R$",
+    "PANEL": {
+      "PICK_STAGE": "Selecione o estágio",
+      "ARCHIVED_NOTE": "Lead perdido: oculto no kanban."
+    }
   }
 }
