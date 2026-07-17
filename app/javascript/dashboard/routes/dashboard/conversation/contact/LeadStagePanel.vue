@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useI18n } from 'vue-i18n';
 import { useAlert } from 'dashboard/composables';
+import { useStageLabels } from 'dashboard/composables/useStageLabels';
 
 // Qualificar o lead sem sair da conversa. O mesmo dado do board: o custom
 // attribute `stage` do contato. Aqui e so um atalho visivel — o accordion de
@@ -38,8 +39,8 @@ const custom = computed(() => lead.value.custom_attributes || {});
 const stageAtual = computed(() => custom.value.stage || '');
 const arquivado = computed(() => Boolean(custom.value.arquivado));
 
-const stageLabel = stage =>
-  t(`KANBAN.STAGES.${stage.toUpperCase()}`, stage.replace(/_/g, ' '));
+// Mesma fonte de rotulo do board: o estagio nao pode ter dois nomes.
+const { stageLabel } = useStageLabels();
 
 // Merge raso no backend: mandar so o que muda preserva utm_*, valor etc.
 const patch = async customAttributes => {

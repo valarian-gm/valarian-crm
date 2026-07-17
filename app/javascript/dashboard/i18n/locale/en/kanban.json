@@ -19,7 +19,7 @@
     "EDITOR": {
       "OPEN": "Edit stages",
       "TITLE": "Edit kanban stages",
-      "SUBTITLE": "Drag to reorder. Stages holding leads cannot be removed.",
+      "SUBTITLE": "Click a name to rename. Drag to reorder.",
       "NEW_PLACEHOLDER": "New stage (e.g. Negotiating)",
       "ADD": "Add",
       "REMOVE": "Remove stage",
@@ -29,9 +29,10 @@
       "SAVE_ERROR": "Could not save the stages.",
       "DUPLICATE": "That stage already exists.",
       "HAS_LEADS": "Holds {count} lead(s) — move them before removing.",
-      "LOCKED": "Structural stage: New catches incoming leads and Customer records the contract value.",
+      "LOCKED": "Structural stage: rename is fine, removal is not (New catches incoming leads and Customer records the value).",
       "HINT": "Stages become the board columns. New and Customer cannot be removed.",
-      "NO_DEFINITION": "The Stage attribute does not exist yet. Deploy again."
+      "NO_DEFINITION": "The Stage attribute does not exist yet. Deploy again.",
+      "RENAME": "Click to rename"
     },
     "SHOW_ARCHIVED": "Archived ({count})",
     "WON": "Won",

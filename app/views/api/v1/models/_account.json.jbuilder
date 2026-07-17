@@ -15,6 +15,11 @@ if resource.custom_attributes.present?
     json.referral_source resource.custom_attributes['referral_source'] if resource.custom_attributes['referral_source'].present?
     json.brand_info resource.custom_attributes['brand_info'] if resource.custom_attributes['brand_info'].present?
     json.onboarding_step resource.onboarding_step if resource.onboarding_step.present?
+    # [valarian] rotulos das etapas do kanban. Este partial e uma allowlist: sem
+    # esta linha o valor fica salvo no banco e NUNCA chega no front.
+    if resource.custom_attributes['kanban_stage_labels'].present?
+      json.kanban_stage_labels resource.custom_attributes['kanban_stage_labels']
+    end
     if resource.custom_attributes['help_center_generation_id'].present?
       json.help_center_generation_id resource.custom_attributes['help_center_generation_id']
     end

@@ -117,7 +117,13 @@ class Api::V1::AccountsController < Api::BaseController
   end
 
   def custom_attributes_params
-    params.permit(:industry, :company_size, :timezone, :referral_source, :user_role, :website)
+    params.permit(
+      :industry, :company_size, :timezone, :referral_source, :user_role, :website,
+      # [valarian] rotulos das etapas do kanban: { <chave_estavel> => "Rotulo" }.
+      # A chave do estagio NUNCA muda (o codigo depende de 'novo'/'cliente' e os
+      # contatos guardam a chave em custom_attributes.stage); so o rotulo e editavel.
+      kanban_stage_labels: {}
+    )
   end
 
   def settings_params

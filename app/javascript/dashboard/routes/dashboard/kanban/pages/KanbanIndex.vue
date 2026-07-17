@@ -5,6 +5,7 @@ import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useI18n } from 'vue-i18n';
 import Draggable from 'vuedraggable';
 import { useAlert } from 'dashboard/composables';
+import { useStageLabels } from 'dashboard/composables/useStageLabels';
 import Button from 'dashboard/components-next/button/Button.vue';
 import Avatar from 'dashboard/components-next/avatar/Avatar.vue';
 import StageEditor from '../components/StageEditor.vue';
@@ -42,10 +43,8 @@ const stages = computed(() => {
   return values?.length ? values : DEFAULT_STAGES;
 });
 
-// Etapa custom (criada pelo usuario) nao tem chave de i18n: humaniza a chave
-// em vez de mostrar 'em_negociacao' cru.
-const stageLabel = stage =>
-  t(`KANBAN.STAGES.${stage.toUpperCase()}`, stage.replace(/_/g, ' '));
+// Rotulo customizado > traducao padrao > chave humanizada.
+const { stageLabel, customLabels } = useStageLabels();
 
 // Etapas que o editor nao deixa remover: sem elas o board perde as regras
 // (a de entrada pesca quem nao tem estagio; a de venda pede o valor).
@@ -67,16 +66,22 @@ const stageCounts = computed(() =>
   }, {})
 );
 
-const saveStages = async novosEstagios => {
+const saveStages = async ({ stages: novosEstagios, labels }) => {
   if (!stageDefinition.value?.id) {
     useAlert(t('KANBAN.EDITOR.NO_DEFINITION'));
     return;
   }
   isSavingStages.value = true;
   try {
+    // As CHAVES vivem no custom attribute (é o que o contato guarda)...
     await store.dispatch('attributes/update', {
       id: stageDefinition.value.id,
       attribute_values: novosEstagios,
+    });
+    // ...e os ROTULOS na conta. Separados de proposito: renomear nao pode
+    // orfanar lead nem quebrar o codigo que depende de 'novo'/'cliente'.
+    await store.dispatch('accounts/update', {
+      kanban_stage_labels: labels,
     });
     isEditorOpen.value = false;
     await fetchBoard();
@@ -449,6 +454,7 @@ onMounted(async () => {
       :stages="stages"
       :counts="stageCounts"
       :locked-stages="LOCKED_STAGES"
+      :labels="customLabels"
       :is-saving="isSavingStages"
       @save="saveStages"
       @close="isEditorOpen = false"
