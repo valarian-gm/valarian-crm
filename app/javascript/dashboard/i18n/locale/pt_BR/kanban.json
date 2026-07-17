@@ -32,6 +32,18 @@
       "LOCKED": "Etapa estrutural: Novo recebe os leads que chegam e Cliente registra o valor do contrato.",
       "HINT": "As etapas viram as colunas do board. Novo e Cliente não podem ser removidas.",
       "NO_DEFINITION": "O atributo Estágio ainda não existe. Faça um novo deploy."
-    }
+    },
+    "SHOW_ARCHIVED": "Arquivados ({count})",
+    "WON": "Ganho",
+    "LOST": "Perder",
+    "WON_HINT": "Marcar como ganho: move para Cliente e registra o valor",
+    "LOST_HINT": "Marcar como perdido: fica oculto no board",
+    "WON_DONE": "{name} virou cliente.",
+    "LOST_DONE": "{name} arquivado.",
+    "RESTORE": "Restaurar",
+    "RESTORED": "{name} restaurado.",
+    "EDIT_VALUE": "Editar valor do contrato",
+    "ADD_VALUE": "+ valor",
+    "VALUE_PLACEHOLDER": "Valor em R$"
   }
 }

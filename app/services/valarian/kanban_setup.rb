@@ -16,6 +16,7 @@ class Valarian::KanbanSetup
   def call
     stage_attribute
     valor_contrato_attribute
+    arquivado_attribute
     @account
   end
 
@@ -40,6 +41,18 @@ class Valarian::KanbanSetup
     # 'number', NUNCA 'currency': FilterService::ATTRIBUTE_TYPES nao mapeia
     # currency, o cast SQL sai vazio ('::') e o filtro quebra. R$ formatado no front.
     attribute.attribute_display_type = 'number'
+    attribute.save!
+  end
+
+  # Lead perdido. E ortogonal ao estagio de proposito: um lead pode estar
+  # 'qualificado' E perdido — ele nao muda de coluna, so some da visao padrao.
+  # Por isso NAO e um estagio.
+  def arquivado_attribute
+    attribute = find_or_init('arquivado')
+    attribute.attribute_display_name = 'Arquivado'
+    attribute.attribute_description = 'Lead perdido: fica oculto no board até ligar o filtro de arquivados'
+    # checkbox mapeia pra 'boolean' em FilterService::ATTRIBUTE_TYPES — filtravel.
+    attribute.attribute_display_type = 'checkbox'
     attribute.save!
   end
 

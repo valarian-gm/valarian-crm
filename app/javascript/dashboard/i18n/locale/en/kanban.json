@@ -32,6 +32,18 @@
       "LOCKED": "Structural stage: New catches incoming leads and Customer records the contract value.",
       "HINT": "Stages become the board columns. New and Customer cannot be removed.",
       "NO_DEFINITION": "The Stage attribute does not exist yet. Deploy again."
-    }
+    },
+    "SHOW_ARCHIVED": "Archived ({count})",
+    "WON": "Won",
+    "LOST": "Lose",
+    "WON_HINT": "Mark as won: moves to Customer and records the value",
+    "LOST_HINT": "Mark as lost: hidden from the board",
+    "WON_DONE": "{name} is now a customer.",
+    "LOST_DONE": "{name} archived.",
+    "RESTORE": "Restore",
+    "RESTORED": "{name} restored.",
+    "EDIT_VALUE": "Edit contract value",
+    "ADD_VALUE": "+ value",
+    "VALUE_PLACEHOLDER": "Value in BRL"
   }
 }

@@ -89,8 +89,9 @@ const formatCurrency = value => {
   });
 };
 
+// Soma o que esta visivel: lead perdido nao infla o numero.
 const columnTotal = stage =>
-  (columns.value[stage] || []).reduce((sum, contact) => sum + valorDe(contact), 0);
+  cardsDe(stage).reduce((sum, contact) => sum + valorDe(contact), 0);
 
 // Total do topo = so a coluna Cliente. Somar todas as colunas misturaria o que
 // nao deve (lead em 'excluir' com valor entraria na conta); o numero que importa
@@ -140,6 +141,25 @@ const normalize = contact => ({
 
 const valorDe = contact => Number(contact.customAttributes?.valor_contrato || 0);
 const utmDe = contact => contact.customAttributes?.utm_source;
+const arquivadoDe = contact => Boolean(contact.customAttributes?.arquivado);
+
+// Lead perdido some da visao padrao. Filtro no cliente: o board ja tem os
+// contatos em memoria, nao vale complicar a query (e o OR da coluna de entrada)
+// pra economizar um filtro de array.
+const showArchived = ref(false);
+
+const cardsDe = stage => {
+  const todos = columns.value[stage] || [];
+  return showArchived.value ? todos : todos.filter(c => !arquivadoDe(c));
+};
+
+const archivedCount = computed(() =>
+  stages.value.reduce(
+    (total, stage) =>
+      total + (columns.value[stage] || []).filter(arquivadoDe).length,
+    0
+  )
+);
 
 const stageQuery = stage => {
   const marcados = {
@@ -179,6 +199,55 @@ const fetchBoard = async () => {
     await Promise.all(stages.value.map(fetchStage));
   } finally {
     isLoading.value = false;
+  }
+};
+
+// Acoes rapidas do card: o trabalho do dia a dia sem drag nem sair do board.
+const marcarGanho = async contact => {
+  let valor = valorDe(contact);
+  if (!valor) {
+    const input = window.prompt(t('KANBAN.CONTRACT_VALUE_PROMPT'));
+    if (input === null) return;
+    valor = Number(String(input).replace(',', '.')) || 0;
+  }
+  await patchContact(contact, { stage: WON_STAGE, valor_contrato: valor });
+  useAlert(t('KANBAN.WON_DONE', { name: contact.name }));
+};
+
+const marcarPerdido = async contact => {
+  await patchContact(contact, { arquivado: true });
+  useAlert(t('KANBAN.LOST_DONE', { name: contact.name }));
+};
+
+const restaurar = async contact => {
+  await patchContact(contact, { arquivado: false });
+  useAlert(t('KANBAN.RESTORED', { name: contact.name }));
+};
+
+// Edicao do valor direto no card.
+const editandoValor = ref(null);
+const rascunhoValor = ref('');
+
+const abrirEdicaoValor = contact => {
+  editandoValor.value = contact.id;
+  rascunhoValor.value = valorDe(contact) || '';
+};
+
+const salvarValor = async contact => {
+  const valor = Number(String(rascunhoValor.value).replace(',', '.')) || 0;
+  editandoValor.value = null;
+  if (valor === valorDe(contact)) return;
+  await patchContact(contact, { valor_contrato: valor });
+};
+
+// Escreve so o que mudou: o backend faz merge raso, o resto sobrevive.
+const patchContact = async (contact, customAttributes) => {
+  try {
+    await store.dispatch('contacts/update', { id: contact.id, customAttributes });
+    await fetchBoard();
+  } catch (error) {
+    useAlert(t('KANBAN.MOVE_ERROR'));
+    await fetchBoard();
   }
 };
 
@@ -243,6 +312,18 @@ onMounted(async () => {
         </div>
       </div>
       <div class="flex items-center gap-1">
+        <woot-button
+          :variant="showArchived ? 'smooth' : 'clear'"
+          @click="showArchived = !showArchived"
+        >
+          <span class="flex items-center gap-1.5">
+            <span
+              :class="showArchived ? 'i-lucide-eye' : 'i-lucide-eye-off'"
+              class="size-4"
+            />
+            {{ t('KANBAN.SHOW_ARCHIVED', { count: archivedCount }) }}
+          </span>
+        </woot-button>
         <woot-button variant="clear" @click="isEditorOpen = true">
           <span class="flex items-center gap-1.5">
             <span class="i-lucide-settings-2 size-4" />
@@ -282,7 +363,7 @@ onMounted(async () => {
               {{ stageLabel(stage) }}
             </span>
             <span class="text-xs tabular-nums text-n-slate-11">
-              {{ (columns[stage] || []).length }}
+              {{ cardsDe(stage).length }}
             </span>
           </div>
           <!-- Soma da propria etapa: cada coluna mostra quanto tem nela. -->
@@ -296,7 +377,7 @@ onMounted(async () => {
         </div>
 
         <Draggable
-          :list="columns[stage]"
+          :list="cardsDe(stage)"
           :group="{ name: 'leads' }"
           item-key="id"
           tag="ul"
@@ -306,7 +387,8 @@ onMounted(async () => {
         >
           <template #item="{ element }">
             <li
-              class="list-none rounded-lg bg-n-solid-1 border border-n-weak hover:border-n-slate-6"
+              class="list-none transition-opacity border rounded-lg bg-n-solid-1 border-n-weak hover:border-n-slate-6"
+              :class="{ 'opacity-40 grayscale': arquivadoDe(element) }"
             >
               <div class="flex items-start justify-between gap-1 p-3 cursor-grab">
                 <!-- Clique no corpo abre a CONVERSA: e onde se le o papo e responde. -->
@@ -327,12 +409,6 @@ onMounted(async () => {
                   <p v-if="element.email" class="text-xs truncate text-n-slate-11">
                     {{ element.email }}
                   </p>
-                  <p
-                    v-if="valorDe(element) > 0"
-                    class="mt-1 text-xs font-medium tabular-nums text-n-teal-11"
-                  >
-                    {{ formatCurrency(valorDe(element)) }}
-                  </p>
                   <span
                     v-if="utmDe(element)"
                     class="inline-block px-2 py-0.5 mt-2 text-xs rounded-md bg-n-alpha-2 text-n-slate-11"
@@ -348,6 +424,70 @@ onMounted(async () => {
                 >
                   <span class="i-lucide-contact size-4" />
                 </button>
+              </div>
+
+              <!-- Valor editavel no proprio card -->
+              <div class="px-3 pb-2">
+                <input
+                  v-if="editandoValor === element.id"
+                  v-model="rascunhoValor"
+                  type="number"
+                  inputmode="decimal"
+                  class="w-full !h-7 !mb-0 !text-xs"
+                  :placeholder="t('KANBAN.VALUE_PLACEHOLDER')"
+                  autofocus
+                  @click.stop
+                  @blur="salvarValor(element)"
+                  @keyup.enter="salvarValor(element)"
+                  @keyup.esc="editandoValor = null"
+                />
+                <button
+                  v-else
+                  class="text-xs font-medium tabular-nums hover:underline"
+                  :class="valorDe(element) > 0 ? 'text-n-teal-11' : 'text-n-slate-10'"
+                  :title="t('KANBAN.EDIT_VALUE')"
+                  @click.stop="abrirEdicaoValor(element)"
+                >
+                  {{
+                    valorDe(element) > 0
+                      ? formatCurrency(valorDe(element))
+                      : t('KANBAN.ADD_VALUE')
+                  }}
+                </button>
+              </div>
+
+              <!-- Acoes rapidas -->
+              <div
+                class="flex items-center gap-1 px-3 py-2 border-t border-n-weak"
+              >
+                <template v-if="arquivadoDe(element)">
+                  <button
+                    class="flex items-center gap-1 px-2 py-1 text-xs rounded-md text-n-slate-11 hover:bg-n-alpha-2"
+                    @click.stop="restaurar(element)"
+                  >
+                    <span class="i-lucide-undo-2 size-3" />
+                    {{ t('KANBAN.RESTORE') }}
+                  </button>
+                </template>
+                <template v-else>
+                  <button
+                    v-if="stage !== WON_STAGE"
+                    class="flex items-center gap-1 px-2 py-1 text-xs rounded-md text-n-teal-11 hover:bg-n-teal-3"
+                    :title="t('KANBAN.WON_HINT')"
+                    @click.stop="marcarGanho(element)"
+                  >
+                    <span class="i-lucide-circle-check size-3" />
+                    {{ t('KANBAN.WON') }}
+                  </button>
+                  <button
+                    class="flex items-center gap-1 px-2 py-1 text-xs rounded-md text-n-slate-10 hover:bg-n-alpha-2 hover:text-n-ruby-10"
+                    :title="t('KANBAN.LOST_HINT')"
+                    @click.stop="marcarPerdido(element)"
+                  >
+                    <span class="i-lucide-circle-x size-3" />
+                    {{ t('KANBAN.LOST') }}
+                  </button>
+                </template>
               </div>
             </li>
           </template>
